@@ -66,9 +66,17 @@ The Brand Analysis Agent provides comprehensive brand intelligence by combining 
 
 ```mermaid
 graph TD
+    %% Main Flow
+    BWST1[brandWebSearchTool]
+    BWST1 --> BRT1[brandRelevancyTool]
+    BRT1 --> BCET1[brandContentExtractionTool]
+    BCET1 --> CST1[companySizingTool]
+    
     START[Brand Analysis Request] --> BDA1[brandDiscoveryAgent]
     BDA1 --> RST1[redditSearchTool]
-    RST1 --> CDT[competitorDiscoveryTool]
+    RST1 --> RRT1[redditRelevancyTool]
+    RRT1 --> CDT[competitorDiscoveryTool]
+    RRT1 -->|No Good| RST1
     
     CDT --> BDA2[brandDiscoveryAgent - Competitor 1]
     CDT --> BDA3[brandDiscoveryAgent - Competitor 2]
@@ -78,23 +86,40 @@ graph TD
     BDA3 --> RST3[redditSearchTool - Competitor 2]
     BDA4 --> RST4[redditSearchTool - Competitor N]
     
-    RST2 --> SAT1[sentimentAnalysisTool - Competitor 1]
-    RST3 --> SAT2[sentimentAnalysisTool - Competitor 2]
-    RST4 --> SAT3[sentimentAnalysisTool - Competitor N]
+    RST2 --> RRT2[redditRelevancyTool - Competitor 1]
+    RST3 --> RRT3[redditRelevancyTool - Competitor 2]
+    RST4 --> RRT4[redditRelevancyTool - Competitor N]
+
+    RRT2 -->|No Good| RST2
+    RRT3 -->|No Good| RST3
+    RRT4 -->|No Good| RST4
     
-    RST1 --> SAT_PRIMARY[sentimentAnalysisTool - Primary Brand]
+    RRT2 --> SAT1[sentimentAnalysisTool - Competitor 1]
+    RRT3 --> SAT2[sentimentAnalysisTool - Competitor 2]
+    RRT4 --> SAT3[sentimentAnalysisTool - Competitor N]
+    
+    RRT1 --> SAT_PRIMARY[sentimentAnalysisTool - Primary Brand]
     
     SAT1 --> SCORECARD[Scorecard Assembly]
     SAT2 --> SCORECARD
     SAT3 --> SCORECARD
     SAT_PRIMARY --> SCORECARD
     
+    %% Main Flow Styling
     style START fill:#2196F3,stroke:#fff,stroke-width:2px,color:#fff
     style SCORECARD fill:#4CAF50,stroke:#fff,stroke-width:2px,color:#fff
     style BDA1 fill:#FF5722,stroke:#fff,stroke-width:2px,color:#fff
     style BDA2 fill:#FF5722,stroke:#fff,stroke-width:2px,color:#fff
     style BDA3 fill:#FF5722,stroke:#fff,stroke-width:2px,color:#fff
     style BDA4 fill:#FF5722,stroke:#fff,stroke-width:2px,color:#fff
+    
+    %% Primary Brand Discovery Tools Styling
+    style BWST1 fill:#9C27B0,stroke:#fff,stroke-width:2px,color:#fff
+    style BRT1 fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff
+    style BCET1 fill:#FF9800,stroke:#fff,stroke-width:2px,color:#fff
+    style CST1 fill:#607D8B,stroke:#fff,stroke-width:2px,color:#fff
+    
+    %% Reddit Tools Styling
     style RST1 fill:#9C27B0,stroke:#fff,stroke-width:2px,color:#fff
     style RST2 fill:#9C27B0,stroke:#fff,stroke-width:2px,color:#fff
     style RST3 fill:#9C27B0,stroke:#fff,stroke-width:2px,color:#fff
@@ -104,6 +129,10 @@ graph TD
     style SAT2 fill:#607D8B,stroke:#fff,stroke-width:2px,color:#fff
     style SAT3 fill:#607D8B,stroke:#fff,stroke-width:2px,color:#fff
     style SAT_PRIMARY fill:#607D8B,stroke:#fff,stroke-width:2px,color:#fff
+    style RRT1 fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff
+    style RRT2 fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff
+    style RRT3 fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff
+    style RRT4 fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff
 ```
 
 ### Color Legend:
@@ -113,6 +142,7 @@ graph TD
 - 🟣 **Purple**: redditSearchTool (Reddit Data Collection)
 - 🟠 **Orange**: competitorDiscoveryTool (Competitor Identification)
 - 🔘 **Blue-Grey**: sentimentAnalysisTool (Sentiment Analysis)
+- 🟡 **Pink**: redditRelevancyTool (Thread Relevance Evaluation)
 
 ### Key Features:
 - **Sequential Processing**: Each phase builds on previous results
