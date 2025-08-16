@@ -20,7 +20,9 @@ export const redditSearchTool = createTool({
     subreddits: z
       .array(z.string())
       .optional()
-      .describe("Specific subreddits to focus on"),
+      .describe(
+        "Specific subreddits to focus on. Should just be the subreddit name, not the full URL. Do not include the r/ prefix."
+      ),
     maxResults: z
       .number()
       .default(10)
@@ -60,16 +62,17 @@ export const redditSearchTool = createTool({
 
           // Use Exa's includeDomains to restrict to Reddit
           const searchOptions: any = {
-            includeDomains: query.domains || ["reddit.com"],
-            livecrawl: searchDepth === "deep" ? "always" : "never",
+            includeDomains: ["reddit.com"],
+            livecrawl: "never",
             numResults: Math.min(10, targetResults),
-            type: searchDepth === "deep" ? "keyword" : "fast",
+            type: "fast",
           };
-
+          console.log(`Search options:`, searchOptions);
           const response = await exa.searchAndContents(
             query.text,
             searchOptions
           );
+          console.log(`Exa API response:`, response);
 
           // Validate Exa API response
           if (!response || typeof response !== "object") {
