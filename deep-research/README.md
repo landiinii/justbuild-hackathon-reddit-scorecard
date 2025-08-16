@@ -67,12 +67,20 @@ The Brand Analysis Agent provides comprehensive brand intelligence by combining 
 ```mermaid
 graph TD
     %% Main Flow
-    BWST1[brandWebSearchTool]
-    BWST1 --> BRT1[brandRelevancyTool]
-    BRT1 --> BCET1[brandContentExtractionTool]
-    BCET1 --> CST1[companySizingTool]
+
     
+    
+
+    subgraph brandDiscoveryAgent
+      BWST1[brandWebSearchTool]
+      BWST1 --> BRT1[brandRelevancyTool]
+      BRT1 --> BCET1[brandContentExtractionTool]
+      BCET1 --> CST1[companySizingTool]
+    end
+
     START[Brand Analysis Request] --> BDA1[brandDiscoveryAgent]
+    BDA1 --> brandDiscoveryAgent
+    brandDiscoveryAgent --> BDA1
     BDA1 --> RST1[redditSearchTool]
     RST1 --> RRT1[redditRelevancyTool]
     RRT1 --> CDT[competitorDiscoveryTool]
