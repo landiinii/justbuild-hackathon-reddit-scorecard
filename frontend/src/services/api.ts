@@ -16,22 +16,52 @@ export interface BrandAnalysisRequest {
 export interface BrandAnalysisResponse {
   success: boolean;
   data?: {
-    brandData: {
+    // New scorecard format
+    id?: string;
+    brandName?: string;
+    brandWebsite?: string;
+    companySize?: string;
+    competitors?: string[];
+    subreddits?: string[];
+    mentions?: {
+      brand: number;
+      competitors: { [key: string]: number };
+    };
+    threads?: Array<{
+      title: string;
+      url: string;
+      subreddit: string;
+      score: number;
+      comments: number;
+      sentiment: "positive" | "negative" | "neutral";
+      excerpt: string;
+    }>;
+    sentiment?: {
+      brand: number;
+      competitors: { [key: string]: number };
+    };
+    createdAt?: string;
+    status?: string;
+    // Old format (fallback)
+    brandData?: {
       description: string;
       topics: string[];
       categories: string[];
-      additionalContext: Record<string, any>;
+      additionalContext: any;
     };
-    sizingData: {
+    sizingData?: {
       companySize: string;
       confidence: string;
-      keyIndicators: Record<string, any>;
-      sources: string[];
+      keyIndicators: any;
+      sources: any[];
       reasoning: string;
     };
-    searchMetadata: {
+    searchMetadata?: {
       confidence: number;
-      sources: Array<{ url: string; confidenceScore: number }>;
+      sources: Array<{
+        url: string;
+        confidenceScore: number;
+      }>;
       disambiguation: string;
     };
   };
@@ -45,7 +75,7 @@ export interface WorkflowRun {
   error?: string;
 }
 
-class ApiService {
+export class ApiService {
   private async makeRequest<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -76,16 +106,20 @@ class ApiService {
         throw new Error(`HTTP error! status: ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json();
-      console.log(`Response data:`, data);
-      return data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return await response.json();
+      } else {
+        const text = await response.text();
+        return { text } as T;
+      }
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      console.error(`Request failed for ${url}:`, error);
       throw error;
     }
   }
 
-  // Test the connection to the backend
+  // Test backend connection
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
       const response = await fetch(`${API_BASE_URL}/`);
@@ -98,19 +132,20 @@ class ApiService {
         };
       }
     } catch (error) {
-      return { success: false, message: `Cannot connect to backend: ${error}` };
+      return {
+        success: false,
+        message: `Connection failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      };
     }
   }
 
   // Get available agents
-  async getAgents(): Promise<string[]> {
+  async getAgents(): Promise<any[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/agents`);
-      if (response.ok) {
-        const data = await response.json();
-        return data.agents || [];
-      }
-      return [];
+      const response = await this.makeRequest<any>("/api/agents");
+      return response.agents || [];
     } catch (error) {
       console.warn("Could not fetch agents:", error);
       return [];
@@ -118,25 +153,21 @@ class ApiService {
   }
 
   // Get available workflows
-  async getWorkflows(): Promise<string[]> {
+  async getWorkflows(): Promise<any[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/workflows`);
-      if (response.ok) {
-        const data = await response.json();
-        return data.workflows || [];
-      }
-      return [];
+      const response = await this.makeRequest<any>("/api/workflows");
+      return response.workflows || [];
     } catch (error) {
       console.warn("Could not fetch workflows:", error);
       return [];
     }
   }
 
-  // Call the brandDiscoveryAgent directly
-  async callBrandDiscoveryAgent(
+  // Call the brandAnalysisAgent directly
+  async callBrandAnalysisAgent(
     request: BrandAnalysisRequest
   ): Promise<BrandAnalysisResponse> {
-    const endpoint = "/api/agents/brandDiscoveryAgent/generate";
+    const endpoint = "/api/agents/brandAnalysisAgent/generate";
 
     try {
       const response = await this.makeRequest<any>(endpoint, {
@@ -145,7 +176,7 @@ class ApiService {
           messages: [
             {
               role: "user",
-              content: `Research the brand "${request.brandName}" ${
+              content: `Analyze the brand "${request.brandName}" ${
                 request.brandContext ? `(${request.brandContext})` : ""
               }. 
               ${request.brandUrl ? `Known URL: ${request.brandUrl}` : ""}
@@ -172,17 +203,83 @@ class ApiService {
             },
           ],
           maxSteps: 20,
+          experimental_output: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              brandName: { type: "string" },
+              brandWebsite: { type: "string" },
+              companySize: { type: "string" },
+              competitors: { type: "array", items: { type: "string" } },
+              subreddits: { type: "array", items: { type: "string" } },
+              mentions: {
+                type: "object",
+                properties: {
+                  brand: { type: "number" },
+                  competitors: { type: "object" },
+                },
+              },
+              threads: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    url: { type: "string" },
+                    subreddit: { type: "string" },
+                    score: { type: "number" },
+                    comments: { type: "number" },
+                    sentiment: {
+                      type: "string",
+                      enum: ["positive", "negative", "neutral"],
+                    },
+                    excerpt: { type: "string" },
+                  },
+                },
+              },
+              sentiment: {
+                type: "object",
+                properties: {
+                  brand: { type: "number" },
+                  competitors: { type: "object" },
+                },
+              },
+              createdAt: { type: "string" },
+              status: { type: "string" },
+            },
+            required: [
+              "id",
+              "brandName",
+              "brandWebsite",
+              "companySize",
+              "competitors",
+              "subreddits",
+              "mentions",
+              "threads",
+              "sentiment",
+              "createdAt",
+              "status",
+            ],
+          },
         }),
       });
 
       // Handle different response formats
-      if (response.text) {
-        // Try to parse the text response
+      if (response.choices && response.choices[0]?.message?.content) {
         try {
-          const parsed = JSON.parse(response.text);
-          return { success: true, data: parsed };
-        } catch {
-          // If it's not JSON, treat as success with text data
+          const content = response.choices[0].message.content;
+          const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[1]);
+            return { success: true, data: parsed };
+          } else {
+            // Try to parse the entire content as JSON
+            const parsed = JSON.parse(content);
+            return { success: true, data: parsed };
+          }
+        } catch (parseError) {
+          console.warn("Could not parse JSON response:", parseError);
+          // Return as text response
           return {
             success: true,
             data: {
@@ -213,7 +310,7 @@ class ApiService {
         return { success: true, data: response };
       }
     } catch (error) {
-      console.error("Brand discovery agent call failed:", error);
+      console.error("Brand analysis agent call failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -221,14 +318,14 @@ class ApiService {
     }
   }
 
-  // Stream the brand discovery agent for real-time progress
-  async streamBrandDiscoveryAgent(
+  // Stream the brand analysis agent for real-time progress
+  async streamBrandAnalysisAgent(
     request: BrandAnalysisRequest
   ): Promise<ReadableStream<Uint8Array> | null> {
     try {
-      console.log("Attempting to stream from brand discovery agent...");
+      console.log("Attempting to stream from brand analysis agent...");
       const response = await fetch(
-        `${API_BASE_URL}/api/agents/brandDiscoveryAgent/stream`,
+        `${API_BASE_URL}/api/agents/brandAnalysisAgent/stream`,
         {
           method: "POST",
           headers: {
@@ -238,7 +335,7 @@ class ApiService {
             messages: [
               {
                 role: "user",
-                content: `Research the brand "${request.brandName}" ${
+                content: `Analyze the brand "${request.brandName}" ${
                   request.brandContext ? `(${request.brandContext})` : ""
                 }. 
                 ${request.brandUrl ? `Known URL: ${request.brandUrl}` : ""}
@@ -302,29 +399,79 @@ class ApiService {
       throw new Error(analysis.error || "Analysis failed");
     }
 
-    const { brandData, sizingData, searchMetadata } = analysis.data;
+    // If the analysis returns a complete scorecard object, use it directly
+    if (analysis.data.id && analysis.data.brandName === brandName) {
+      return {
+        brandWebsite: analysis.data.brandWebsite || "",
+        companySize: analysis.data.companySize || "Unknown",
+        competitors: analysis.data.competitors || [],
+        subreddits: analysis.data.subreddits || [],
+        mentions: analysis.data.mentions || { brand: 0, competitors: {} },
+        threads: analysis.data.threads || [],
+        sentiment: analysis.data.sentiment || { brand: 0, competitors: {} },
+        status: "completed" as const,
+        generationProgress: [
+          {
+            step: "Brand Analysis Complete",
+            status: "completed",
+            message: `Successfully analyzed ${brandName} with comprehensive Reddit data`,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      };
+    }
 
+    // Fallback to old format if needed
+    if (
+      analysis.data.brandData &&
+      analysis.data.sizingData &&
+      analysis.data.searchMetadata
+    ) {
+      const { brandData, sizingData, searchMetadata } = analysis.data;
+
+      return {
+        brandWebsite:
+          searchMetadata.sources.find((s) => s.confidenceScore >= 70)?.url ||
+          "",
+        companySize: sizingData.companySize,
+        competitors: [], // Would need competitor analysis agent
+        subreddits: [], // Would need Reddit analysis agent
+        mentions: { brand: 0, competitors: {} }, // Would need Reddit analysis agent
+        threads: [], // Would need Reddit analysis agent
+        sentiment: { brand: 0, competitors: {} }, // Would need Reddit analysis agent
+        status: "completed" as const,
+        generationProgress: [
+          {
+            step: "Brand Discovery",
+            status: "completed",
+            message: `Successfully analyzed ${brandName}`,
+            timestamp: new Date().toISOString(),
+          },
+          {
+            step: "Company Sizing",
+            status: "completed",
+            message: `Classified as ${sizingData.companySize} (${sizingData.confidence} confidence)`,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+
+    // If no valid data structure found, return minimal scorecard
     return {
-      brandWebsite:
-        searchMetadata.sources.find((s) => s.confidenceScore >= 70)?.url || "",
-      companySize: sizingData.companySize,
-      competitors: [], // Would need competitor analysis agent
-      subreddits: [], // Would need Reddit analysis agent
-      mentions: { brand: 0, competitors: {} }, // Would need Reddit analysis agent
-      threads: [], // Would need Reddit analysis agent
-      sentiment: { brand: 0, competitors: {} }, // Would need Reddit analysis agent
+      brandWebsite: "",
+      companySize: "Unknown",
+      competitors: [],
+      subreddits: [],
+      mentions: { brand: 0, competitors: {} },
+      threads: [],
+      sentiment: { brand: 0, competitors: {} },
       status: "completed" as const,
       generationProgress: [
         {
-          step: "Brand Discovery",
+          step: "Analysis Complete",
           status: "completed",
-          message: `Successfully analyzed ${brandName}`,
-          timestamp: new Date().toISOString(),
-        },
-        {
-          step: "Company Sizing",
-          status: "completed",
-          message: `Classified as ${sizingData.companySize} (${sizingData.confidence} confidence)`,
+          message: `Analysis completed for ${brandName}`,
           timestamp: new Date().toISOString(),
         },
       ],

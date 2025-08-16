@@ -90,27 +90,39 @@ const GenerateScorecardPage: React.FC<GenerateScorecardPageProps> = ({
         timestamp: new Date().toISOString()
       },
       {
-        step: 'Brand Search & Discovery',
+        step: 'Primary Brand Discovery',
         status: 'pending',
-        message: 'Searching for brand information...',
+        message: 'Gathering comprehensive brand information...',
         timestamp: new Date().toISOString()
       },
       {
-        step: 'Relevancy Evaluation',
+        step: 'Reddit Analysis for Primary Brand',
         status: 'pending',
-        message: 'Evaluating source relevance...',
+        message: 'Searching Reddit discussions and sentiment...',
         timestamp: new Date().toISOString()
       },
       {
-        step: 'Content Extraction',
+        step: 'Competitor Discovery',
         status: 'pending',
-        message: 'Extracting brand information...',
+        message: 'Identifying and analyzing competitors...',
         timestamp: new Date().toISOString()
       },
       {
-        step: 'Company Sizing',
+        step: 'Enhanced Competitor Analysis',
         status: 'pending',
-        message: 'Analyzing company size...',
+        message: 'Gathering competitor Reddit data and sentiment...',
+        timestamp: new Date().toISOString()
+      },
+      {
+        step: 'Primary Brand Sentiment Analysis',
+        status: 'pending',
+        message: 'Analyzing brand sentiment and engagement...',
+        timestamp: new Date().toISOString()
+      },
+      {
+        step: 'Scorecard Assembly',
+        status: 'pending',
+        message: 'Compiling comprehensive scorecard...',
         timestamp: new Date().toISOString()
       }
     ];
@@ -145,7 +157,7 @@ const GenerateScorecardPage: React.FC<GenerateScorecardPageProps> = ({
       };
 
       // Try streaming first, fallback to regular call
-      let stream = await apiService.streamBrandDiscoveryAgent(request);
+      let stream = await apiService.streamBrandAnalysisAgent(request);
       
       if (stream) {
         // Handle streaming response
@@ -222,7 +234,7 @@ const GenerateScorecardPage: React.FC<GenerateScorecardPageProps> = ({
 
     // Make the actual API call
     try {
-      const response = await apiService.callBrandDiscoveryAgent(request);
+      const response = await apiService.callBrandAnalysisAgent(request);
       
       if (response.success && response.data) {
         // Convert response to scorecard format
@@ -256,10 +268,22 @@ const GenerateScorecardPage: React.FC<GenerateScorecardPageProps> = ({
       // Update steps based on the streaming data
       if (data.step || data.phase) {
         const stepName = data.step || data.phase;
-        const stepIndex = steps.findIndex(s => 
-          s.step.toLowerCase().includes(stepName.toLowerCase()) ||
-          stepName.toLowerCase().includes(s.step.toLowerCase())
-        );
+        
+        // Map step names to our step structure
+        let stepIndex = -1;
+        if (stepName.toLowerCase().includes('brand discovery') || stepName.toLowerCase().includes('primary brand')) {
+          stepIndex = 1; // Primary Brand Discovery
+        } else if (stepName.toLowerCase().includes('reddit') || stepName.toLowerCase().includes('discussions')) {
+          stepIndex = 2; // Reddit Analysis for Primary Brand
+        } else if (stepName.toLowerCase().includes('competitor') && !stepName.toLowerCase().includes('enhanced')) {
+          stepIndex = 3; // Competitor Discovery
+        } else if (stepName.toLowerCase().includes('enhanced') || stepName.toLowerCase().includes('competitor analysis')) {
+          stepIndex = 4; // Enhanced Competitor Analysis
+        } else if (stepName.toLowerCase().includes('sentiment') && !stepName.toLowerCase().includes('competitor')) {
+          stepIndex = 5; // Primary Brand Sentiment Analysis
+        } else if (stepName.toLowerCase().includes('scorecard') || stepName.toLowerCase().includes('assembly') || stepName.toLowerCase().includes('compile')) {
+          stepIndex = 6; // Scorecard Assembly
+        }
 
         if (stepIndex !== -1) {
           const updatedSteps = [...steps];

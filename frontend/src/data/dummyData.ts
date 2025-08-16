@@ -24,24 +24,25 @@ export const dummyScorecards: Scorecard[] = [
     },
     threads: [
       {
-        title: "Tesla Model 3 Performance Review - Still the King?",
-        url: "https://reddit.com/r/teslamotors/comments/example1",
+        title:
+          "Regardless of what and whatever, the people at Tesla makes really good vehicles",
+        url: "https://www.reddit.com/r/teslamotors/comments/1kowyyo/regardless_of_what_and_whatever_the_people_at/",
         subreddit: "r/teslamotors",
         score: 1247,
         comments: 89,
         sentiment: "positive",
-        excerpt:
-          "After 6 months with my Model 3 Performance, I can confidently say it's still the best EV in its class...",
+        excerpt: "Been driving this for +5000km, it is very good :)",
       },
       {
-        title: "Tesla Service Experience - Mixed Feelings",
-        url: "https://reddit.com/r/teslamotors/comments/example2",
+        title:
+          "Who else here has never had an issue with their Tesla? I've had mine for 3 years and 100k miles and it's been flawless.",
+        url: "https://www.reddit.com/r/TeslaLounge/comments/1fv25y5/who_else_here_has_never_had_an_issue_with_their/",
         subreddit: "r/teslamotors",
         score: 892,
         comments: 156,
-        sentiment: "neutral",
+        sentiment: "positive",
         excerpt:
-          "Had my first service appointment today. The technician was great but the wait time was longer than expected...",
+          "I constantly have people ask me what problems i had with my car but really none so far. Just regular maintenance.",
       },
     ],
     sentiment: {
