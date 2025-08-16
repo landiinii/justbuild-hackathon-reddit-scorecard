@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, TrendingUp, Users, Globe, Building, Users2, MessageSquare, Heart, ThumbsDown, Minus } from 'lucide-react';
 import { Scorecard } from '../types/scorecard';
+import redditLogo from '../images/reddit_logo.png';
 
 interface ScorecardDetailPageProps {
   scorecards: Scorecard[];
@@ -76,7 +77,7 @@ const ScorecardDetailPage: React.FC<ScorecardDetailPageProps> = ({
             </button>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-white" />
+                <img src={redditLogo} alt="Reddit" className="w-6 h-6" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900">{scorecard.brandName} Scorecard</h1>
             </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Loader2, CheckCircle, AlertCircle, TrendingUp, Wifi, WifiOff } from 'lucide-react';
 import { Scorecard, GenerationStep } from '../types/scorecard';
 import apiService, { BrandAnalysisRequest } from '../services/api';
+import redditLogo from '../images/reddit_logo.png';
 
 interface GenerateScorecardPageProps {
   onScorecardCreated: (scorecard: Scorecard) => void;
@@ -376,7 +377,7 @@ const GenerateScorecardPage: React.FC<GenerateScorecardPageProps> = ({
             </button>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-white" />
+                <img src={redditLogo} alt="Reddit" className="w-6 h-6" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900">Generate New Scorecard</h1>
             </div>
@@ -493,7 +494,7 @@ const GenerateScorecardPage: React.FC<GenerateScorecardPageProps> = ({
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center space-x-3 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-white" />
+                  <img src={redditLogo} alt="Reddit" className="w-5 h-5" />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">
                   Researching: {currentScorecard?.brandName}
