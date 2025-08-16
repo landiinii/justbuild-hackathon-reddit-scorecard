@@ -1,9 +1,10 @@
 import { openai } from '@ai-sdk/openai';
 import { Agent } from '@mastra/core/agent';
-import { redditSearchTool } from '../tools/reddit_search_tool';
+import { redditSearchTool } from '../tools/reddit_search_tool_direct';
 import { competitorDiscoveryTool } from '../tools/competitor_discovery_tool';
 import { sentimentAnalysisTool } from '../tools/sentiment_analysis_tool';
 import { brandDiscoveryTool } from '../tools/brand_discovery_tool';
+import { redditRelevancyTool } from '../tools/reddit_relevancy_tool';
 
 const mainModel = openai('gpt-4o');
 
@@ -22,24 +23,31 @@ export const brandAnalysisAgent = new Agent({
   3. Use 'deep' search depth for comprehensive analysis
   4. Collect posts, comments, and engagement metrics
 
-  **PHASE 3: Competitor Discovery**
-  1. Use competitorDiscoveryTool to analyze Reddit discussions for competitor mentions
-  2. Identify brands mentioned as alternatives, in comparisons, or as competitors
-  3. Extract the top competitors based on mention frequency and context
+  **PHASE 3: Reddit Relevancy Evaluation**
+  1. Use redditRelevancyTool to evaluate each Reddit thread for relevance to the brand
+  2. Filter threads based on confidence scores (keep threads with score >= 70)
+  3. Only proceed with highly relevant threads for competitor discovery and sentiment analysis
+  4. Use brand categories from Phase 1 to improve relevancy evaluation accuracy
 
-  **PHASE 4: Enhanced Competitor Analysis**
+  **PHASE 4: Competitor Discovery**
+  1. Use competitorDiscoveryTool to analyze only the relevant Reddit discussions for competitor mentions
+  2. Identify brands mentioned as alternatives, in comparisons, or as competitors
+  3. Extract the top competitors based on mention frequency and context from relevant threads
+
+  **PHASE 5: Enhanced Competitor Analysis**
   For each discovered competitor:
   1. Use brandDiscoveryTool to gather detailed competitor information
   2. Use redditSearchTool to find competitor-specific Reddit discussions
-  3. Use sentimentAnalysisTool to analyze sentiment for that specific competitor
-  4. Track competitor mention counts and engagement metrics
+  3. Use redditRelevancyTool to evaluate competitor thread relevance
+  4. Use sentimentAnalysisTool to analyze sentiment for that specific competitor using only relevant threads
+  5. Track competitor mention counts and engagement metrics
 
-  **PHASE 5: Primary Brand Sentiment Analysis**
-  1. Use sentimentAnalysisTool on the primary brand's Reddit data
+  **PHASE 6: Primary Brand Sentiment Analysis**
+  1. Use sentimentAnalysisTool on the primary brand's relevant Reddit data only
   2. Calculate sentiment percentage and breakdown
   3. Ensure sentiment score is on 0-10 scale for frontend display
 
-  **PHASE 6: Scorecard Assembly**
+  **PHASE 7: Scorecard Assembly**
   Create a comprehensive JSON scorecard with:
   - Primary brand information (name, website, company size)
   - Discovered competitors array with individual data
@@ -89,6 +97,7 @@ export const brandAnalysisAgent = new Agent({
   **Error Handling:**
   - If brand discovery fails, continue with provided brand name and context
   - If Reddit data is limited, make best estimates based on available information
+  - If relevancy evaluation fails for threads, include them with caution but note lower confidence
   - If competitor analysis fails for specific competitors, continue with others
   - Always return a complete scorecard, even with partial data
   - Use neutral sentiment (5.0) as fallback when analysis fails
@@ -110,6 +119,7 @@ export const brandAnalysisAgent = new Agent({
     competitorDiscoveryTool,
     sentimentAnalysisTool,
     brandDiscoveryTool,
+    redditRelevancyTool,
   },
 });
 

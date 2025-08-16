@@ -8,6 +8,7 @@ import { researchAgent } from './agents/researchAgent';
 import { webSummarizationAgent } from './agents/webSummarizationAgent';
 import { brandDiscoveryAgent } from './agents/brand_discovery_agent';
 import { brandRelevancyAgent } from './agents/brand_relevancy_agent';
+import { redditRelevancyAgent } from './agents/reddit_relevancy_agent';
 import { brandContentExtractionAgent } from './agents/brand_content_extraction_agent';
 import { companySizingAgent } from './agents/company_sizing_agent';
 import { brandAnalysisAgent } from './agents/brand_analysis_agent';
@@ -25,6 +26,7 @@ export const mastra = new Mastra({
     webSummarizationAgent,
     brandDiscoveryAgent,
     brandRelevancyAgent,
+    redditRelevancyAgent,
     brandContentExtractionAgent,
     companySizingAgent,
     brandAnalysisAgent,
