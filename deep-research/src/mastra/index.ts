@@ -10,6 +10,7 @@ import { brandDiscoveryAgent } from './agents/brand_discovery_agent';
 import { brandRelevancyAgent } from './agents/brand_relevancy_agent';
 import { brandContentExtractionAgent } from './agents/brand_content_extraction_agent';
 import { companySizingAgent } from './agents/company_sizing_agent';
+import { brandAnalysisAgent } from './agents/brand_analysis_agent';
 import { generateReportWorkflow } from './workflows/generateReportWorkflow';
 
 export const mastra = new Mastra({
@@ -26,6 +27,7 @@ export const mastra = new Mastra({
     brandRelevancyAgent,
     brandContentExtractionAgent,
     companySizingAgent,
+    brandAnalysisAgent,
   },
   workflows: { generateReportWorkflow, researchWorkflow },
 });
