@@ -8,7 +8,7 @@ const exa = new Exa(process.env.EXA_API_KEY);
 export const redditSearchTool = createTool({
   id: "reddit-search",
   description:
-    "Search Reddit for brand mentions, discussions, and competitor analysis",
+    "Search Reddit for brand mentions, discussions, and competitor analysis using Exa API",
   inputSchema: z.object({
     brandName: z.string().describe("The brand name to search for on Reddit"),
     brandContext: z
@@ -56,18 +56,64 @@ export const redditSearchTool = createTool({
 
       for (const query of queries) {
         try {
-          console.log(`Searching Reddit for: "${query}"`);
-          const { results } = await exa.searchAndContents(query, {
-            livecrawl: "always",
-            numResults: Math.min(10, targetResults),
-          });
+          console.log(`Searching Reddit for: "${query.text}"`);
 
-          if (results && results.length > 0) {
-            allResults.push(...results);
+          // Use Exa's includeDomains to restrict to Reddit
+          const searchOptions: any = {
+            includeDomains: query.domains || ["reddit.com"],
+            livecrawl: searchDepth === "deep" ? "always" : "never",
+            numResults: Math.min(10, targetResults),
+            type: searchDepth === "deep" ? "keyword" : "fast",
+          };
+
+          const response = await exa.searchAndContents(
+            query.text,
+            searchOptions
+          );
+
+          // Validate Exa API response
+          if (!response || typeof response !== "object") {
+            console.warn(
+              `Invalid response from Exa API for query "${query.text}"`
+            );
+            continue;
+          }
+
+          const { results } = response;
+
+          if (!Array.isArray(results)) {
+            console.warn(
+              `Results is not an array for query "${query.text}":`,
+              typeof results
+            );
+            continue;
+          }
+
+          if (results.length > 0) {
+            // Filter results to ensure they're from Reddit and match our criteria
+            const filteredResults = results.filter((result) => {
+              if (!result || typeof result !== "object") return false;
+              if (!result.url || typeof result.url !== "string") return false;
+
+              return (
+                result.url.includes("reddit.com") && result.url.includes("/r/")
+              ); // Ensure it's a subreddit post
+            });
+
+            allResults.push(...filteredResults);
+            console.log(
+              `Query "${query.text}" returned ${filteredResults.length} valid Reddit results`
+            );
+
             if (allResults.length >= targetResults) break;
+          } else {
+            console.log(`Query "${query.text}" returned no results`);
           }
         } catch (searchError) {
-          console.error(`Error with Reddit query "${query}":`, searchError);
+          console.error(
+            `Error with Reddit query "${query.text}":`,
+            searchError
+          );
           continue;
         }
       }
@@ -97,7 +143,7 @@ export const redditSearchTool = createTool({
         threads: extractThreads(processedResults),
         subreddits: extractSubreddits(processedResults),
         mentions: extractMentions(processedResults, brandName),
-        searchQueries: queries,
+        searchQueries: queries.map((q) => q.text),
       };
     } catch (error) {
       console.error("Error in Reddit search:", error);
@@ -106,8 +152,8 @@ export const redditSearchTool = createTool({
       return {
         results: [],
         threads: [],
-        subreddits: [],
         mentions: [],
+        subreddits: [],
         error: errorMessage,
       };
     }
@@ -118,28 +164,63 @@ function constructRedditQueries(
   brandName: string,
   brandContext?: string,
   subreddits?: string[]
-): string[] {
-  const queries: string[] = [];
+): Array<{ text: string; type: string; domains?: string[] }> {
+  const queries: Array<{ text: string; type: string; domains?: string[] }> = [];
   const contextPart = brandContext ? ` ${brandContext}` : "";
 
-  // Primary brand searches
-  queries.push(`site:reddit.com "${brandName}"${contextPart}`);
-  queries.push(`site:reddit.com ${brandName}${contextPart} review`);
-  queries.push(`site:reddit.com ${brandName}${contextPart} experience`);
-  queries.push(`site:reddit.com ${brandName}${contextPart} vs`);
+  // Primary brand searches - general Reddit search
+  queries.push({
+    text: `"${brandName}"${contextPart}`,
+    type: "brand-mention",
+    domains: ["reddit.com"],
+  });
+
+  queries.push({
+    text: `${brandName}${contextPart} review experience`,
+    type: "review-discussion",
+    domains: ["reddit.com"],
+  });
+
+  queries.push({
+    text: `${brandName}${contextPart} vs alternative competitor`,
+    type: "comparison",
+    domains: ["reddit.com"],
+  });
+
+  // General discussion searches
+  queries.push({
+    text: `"${brandName}" best worst opinion discussion`,
+    type: "opinion-discussion",
+    domains: ["reddit.com"],
+  });
+
+  queries.push({
+    text: `${brandName} ${contextPart} reddit community feedback`,
+    type: "community-feedback",
+    domains: ["reddit.com"],
+  });
 
   // Subreddit-specific searches if provided
   if (subreddits && subreddits.length > 0) {
     for (const subreddit of subreddits.slice(0, 3)) {
       // Limit to top 3 subreddits
       const cleanSubreddit = subreddit.replace(/^r\//, "");
-      queries.push(`site:reddit.com/r/${cleanSubreddit} "${brandName}"`);
+
+      // Search within specific subreddit
+      queries.push({
+        text: `"${brandName}"${contextPart}`,
+        type: "subreddit-specific",
+        domains: [`reddit.com/r/${cleanSubreddit}`],
+      });
+
+      // Search for brand discussions in the subreddit
+      queries.push({
+        text: `${brandName} ${contextPart} discussion`,
+        type: "subreddit-discussion",
+        domains: [`reddit.com/r/${cleanSubreddit}`],
+      });
     }
   }
-
-  // General discussion searches
-  queries.push(`site:reddit.com "${brandName}" "best" OR "worst" OR "opinion"`);
-  queries.push(`site:reddit.com "${brandName}" "alternative" OR "competitor"`);
 
   return queries;
 }
@@ -154,8 +235,8 @@ async function processRedditResults(
 
   for (const result of results) {
     try {
-      // Filter out non-Reddit results
-      if (!result.url?.includes("reddit.com")) {
+      // Ensure it's a Reddit result
+      if (!result.url?.includes("reddit.com") || !result.url?.includes("/r/")) {
         continue;
       }
 
