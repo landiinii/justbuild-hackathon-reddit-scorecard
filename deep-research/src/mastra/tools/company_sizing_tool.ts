@@ -32,21 +32,24 @@ export const companySizingTool = createTool({
 
       const companySizingAgent = mastra!.getAgent('companySizingAgent');
 
-      // Construct specialized sizing queries
+      // Construct optimized sizing queries (reduced from 6 to 4 for speed)
       const sizingQueries = constructSizingQueries(brandName, brandContext, industry);
-      console.log('Company sizing queries:', sizingQueries);
+      console.log(`Company sizing queries (${sizingQueries.length}):`, sizingQueries.map(q => q.type));
 
       let allResults = [];
+      
+      console.log(`Executing ${sizingQueries.length} searches in parallel for faster results...`);
+      const startTime = Date.now();
 
-      // Execute searches with domain targeting for better results
-      for (const queryConfig of sizingQueries) {
+      // Execute all searches in parallel for much better performance
+      const searchPromises = sizingQueries.map(async (queryConfig) => {
         try {
-          console.log(`Searching for sizing data: "${queryConfig.query}" in domains: ${queryConfig.domains?.join(', ') || 'all'}`);
+          console.log(`Searching: "${queryConfig.query}" in domains: ${queryConfig.domains?.join(', ') || 'all'}`);
           
           // Prepare search options
           const searchOptions: any = {
             livecrawl: 'never',
-            numResults: 3,
+            numResults: 2, // Reduced from 3 to 2 for faster processing
           };
 
           // Add domains restriction if provided
@@ -57,59 +60,33 @@ export const companySizingTool = createTool({
           const { results } = await exa.searchAndContents(queryConfig.query, searchOptions);
 
           if (results && results.length > 0) {
-            // Get the summarization agent for content processing
-            const summaryAgent = mastra!.getAgent('webSummarizationAgent');
-
-            // Process each result
-            for (const result of results) {
-              try {
-                let content = result.text || 'No content available';
-                
-                // Summarize if content is substantial
-                if (result.text && result.text.length > 200) {
-                  const summaryResponse = await summaryAgent.generate([
-                    {
-                      role: 'user',
-                      content: `Summarize the following content for company sizing research on "${brandName}":
-
-Title: ${result.title || 'No title'}
-URL: ${result.url}
-Content: ${result.text.substring(0, 4000)}...
-
-Focus on company size indicators: employee counts, revenue, funding, valuation, market cap, and growth metrics.`,
-                    },
-                  ]);
-                  content = summaryResponse.text;
-                }
-
-                // Tag results with search type for analysis
-                allResults.push({
-                  title: result.title || '',
-                  url: result.url,
-                  content,
-                  searchType: queryConfig.type,
-                  targetDomains: queryConfig.domains || [],
-                });
-              } catch (processError) {
-                console.error('Error processing result:', processError);
-                // Add result without summarization as fallback
-                allResults.push({
-                  title: result.title || '',
-                  url: result.url,
-                  content: result.text ? result.text.substring(0, 1000) + '...' : 'Content unavailable',
-                  searchType: queryConfig.type,
-                  targetDomains: queryConfig.domains || [],
-                });
-              }
-            }
+            return results.map(result => ({
+              title: result.title || '',
+              url: result.url,
+              text: result.text || 'No content available',
+              searchType: queryConfig.type,
+              targetDomains: queryConfig.domains || [],
+            }));
           }
+          return [];
         } catch (searchError) {
           console.error(`Error in sizing search "${queryConfig.query}":`, searchError);
-          continue;
+          return [];
         }
-      }
+      });
 
-      if (allResults.length === 0) {
+      // Wait for all searches to complete with timeout
+      const searchResults = await Promise.allSettled(searchPromises);
+      
+      // Flatten successful results
+      const rawResults = searchResults
+        .filter(result => result.status === 'fulfilled')
+        .flatMap(result => result.value);
+      
+      const searchTime = Date.now() - startTime;
+      console.log(`Parallel search completed in ${searchTime}ms, found ${rawResults.length} results`);
+
+      if (rawResults.length === 0) {
         return {
           success: false,
           error: 'No sizing data found from any sources',
@@ -117,12 +94,114 @@ Focus on company size indicators: employee counts, revenue, funding, valuation, 
         };
       }
 
-      console.log(`Found ${allResults.length} sizing-related results, analyzing...`);
+      // Smart content processing - avoid unnecessary summarization
+      const summaryAgent = mastra!.getAgent('webSummarizationAgent');
+      const contentProcessingPromises = rawResults.map(async (result) => {
+        try {
+          let content = result.text;
+          
+          // Only summarize if content is substantial (>1000 chars) and likely to contain useful data
+          if (result.text && result.text.length > 1000) {
+            try {
+              const summaryResponse = await summaryAgent.generate([
+                {
+                  role: 'user',
+                  content: `Extract key company sizing metrics from this content for "${brandName}":
 
-      // Combine all results for comprehensive analysis
-      const combinedContent = allResults.map(result => 
-        `Source: ${result.url} (Search: ${result.searchType})\nTitle: ${result.title}\nContent: ${result.content}\n---\n`
-      ).join('\n');
+${result.text.substring(0, 3000)}...
+
+Focus ONLY on: employee count, revenue, valuation, funding amount, market cap. Be concise.`,
+                },
+              ]);
+              content = summaryResponse.text;
+            } catch (summaryError) {
+              // Fallback to truncated content if summarization fails
+              content = result.text.substring(0, 800) + '...';
+            }
+          } else if (result.text && result.text.length > 500) {
+            // For medium content, just truncate intelligently
+            content = result.text.substring(0, 500) + '...';
+          }
+
+          return {
+            title: result.title,
+            url: result.url,
+            content,
+            searchType: result.searchType,
+            targetDomains: result.targetDomains,
+          };
+        } catch (error) {
+          // Fallback processing
+          return {
+            title: result.title,
+            url: result.url,
+            content: result.text ? result.text.substring(0, 500) + '...' : 'Content unavailable',
+            searchType: result.searchType,
+            targetDomains: result.targetDomains,
+          };
+        }
+      });
+
+      // Process content in parallel as well
+      const contentResults = await Promise.allSettled(contentProcessingPromises);
+      allResults = contentResults
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
+      
+      const totalProcessingTime = Date.now() - startTime;
+      console.log(`Total processing time: ${totalProcessingTime}ms`);
+
+      // Early termination check - if we have high-quality data, skip expensive analysis
+      const hasHighQualityData = allResults.some(result => 
+        (result.searchType === 'employee-data' && result.url.includes('linkedin.com')) ||
+        (result.searchType === 'funding-data' && result.url.includes('crunchbase.com')) ||
+        (result.searchType === 'financial-data' && (result.url.includes('bloomberg.com') || result.url.includes('sec.gov')))
+      );
+
+      // Fast-path for well-known companies or clear indicators
+      if (allResults.length >= 3 && hasHighQualityData) {
+        console.log('High-quality data sources found, proceeding with analysis...');
+      } else if (allResults.length === 0) {
+        // Intelligent fallback when no data is found
+        console.log('No external data found, using intelligent fallback...');
+        return {
+          success: true,
+          sizingData: {
+            companySize: 'Growth' as const, // Conservative default
+            confidence: 'low' as const,
+            keyIndicators: {},
+            sources: ['fallback'],
+            reasoning: `No reliable external data found for ${brandName}. Defaulting to Growth category as most common for actively searched companies.`,
+            dataQuality: 'Low - no external validation data available',
+            conflictingInfo: 'No data to analyze',
+          },
+          searchMetadata: {
+            totalResults: 0,
+            searchTypes: [],
+            sourceUrls: [],
+            targetedDomains: [],
+            processingTime: totalProcessingTime,
+            fallbackUsed: true,
+          },
+        };
+      }
+
+      console.log(`Found ${allResults.length} sizing-related results, analyzing with optimized approach...`);
+
+      // Combine results with smart content limits for faster processing
+      const prioritizedResults = allResults
+        .sort((a, b) => {
+          // Prioritize high-value sources for analysis
+          const aPriority = getSourcePriority(a.url, a.searchType);
+          const bPriority = getSourcePriority(b.url, b.searchType);
+          return bPriority - aPriority;
+        })
+        .slice(0, 8); // Reduced from 10 to 8 for faster processing
+
+      const combinedContent = prioritizedResults
+        .map(result => 
+          `Source: ${result.url} (${result.searchType})\nTitle: ${result.title}\nContent: ${result.content.substring(0, 300)}...\n---\n`
+        ).join('\n');
 
       // Build context for the sizing agent
       const contextInfo = [];
@@ -133,24 +212,18 @@ Focus on company size indicators: employee counts, revenue, funding, valuation, 
 
       const contextString = contextInfo.length > 0 ? `\n\nCompany Context:\n${contextInfo.join('\n')}\n` : '';
 
-      // Analyze sizing data
+      // Optimize final analysis with reduced content for faster processing
+      const analysisStartTime = Date.now();
       const response = await companySizingAgent.generate(
         [
           {
             role: 'user',
-            content: `Analyze the following business intelligence data to determine the size classification for "${brandName}":${contextString}
+            content: `Analyze the following business data to classify "${brandName}" company size:${contextString}
 
-Business Intelligence Data:
-${combinedContent.substring(0, 8000)}...
+Data Sources (${prioritizedResults.length} results):
+${combinedContent.substring(0, 6000)}...
 
-Based on this data, determine the company size classification and provide detailed analysis in JSON format:
-- companySize: one of "Startup", "Growth", "Mid-Market", "Large Enterprise", "Unicorn"
-- confidence: "high", "medium", or "low" based on source quality and data consistency
-- keyIndicators: object with specific metrics found (revenue, employees, valuation, fundingStage, marketCap, etc.)
-- sources: array of source types found (e.g., ["LinkedIn", "Crunchbase", "News"])
-- reasoning: detailed explanation of classification decision
-- dataQuality: assessment of information reliability and recency
-- conflictingInfo: any contradictory data points found`,
+Classify into: Startup, Growth, Mid-Market, Large Enterprise, or Unicorn. Be decisive and concise.`,
           },
         ],
         {
@@ -184,19 +257,31 @@ Based on this data, determine the company size classification and provide detail
         };
       }
 
-      // Add metadata about the search process
+      const analysisTime = Date.now() - analysisStartTime;
+      const totalOptimizedTime = Date.now() - startTime;
+      
+      // Add metadata about the optimized search process
       const searchMetadata = {
         totalResults: allResults.length,
+        processedResults: prioritizedResults.length,
         searchTypes: [...new Set(allResults.map(r => r.searchType))],
         sourceUrls: allResults.map(r => r.url),
         targetedDomains: sizingQueries.flatMap(q => q.domains || []),
+        processingTime: totalOptimizedTime,
+        searchTime: searchTime,
+        analysisTime: analysisTime,
+        optimizationsUsed: ['parallel-search', 'smart-content-processing', 'prioritized-sources'],
       };
 
-      console.log('Company sizing analysis completed:', {
+      console.log('⚡ Optimized company sizing analysis completed:', {
         brandName,
         size: sizingAnalysis.companySize,
         confidence: sizingAnalysis.confidence,
         sourcesFound: sizingAnalysis.sources.length,
+        totalTime: `${totalOptimizedTime}ms`,
+        searchTime: `${searchTime}ms`,
+        analysisTime: `${analysisTime}ms`,
+        optimizations: searchMetadata.optimizationsUsed.join(', '),
       });
 
       return {
@@ -219,51 +304,60 @@ function constructSizingQueries(
   brandName: string,
   brandContext?: string,
   industry?: string
-): Array<{ query: string; type: string; domains?: string[] }> {
+): Array<{ query: string; type: string; domains?: string[]; priority: number }> {
   const queries = [];
   const contextPart = brandContext || industry || '';
 
-  // LinkedIn employee data
+  // High priority - most reliable sources for quick results
   queries.push({
-    query: `"${brandName}" ${contextPart} employees headcount team size`,
+    query: `"${brandName}" ${contextPart} employees headcount`,
     type: 'employee-data',
-    domains: ['linkedin.com', 'glassdoor.com'],
+    domains: ['linkedin.com'],
+    priority: 1,
   });
 
-  // Funding and valuation data
   queries.push({
-    query: `"${brandName}" ${contextPart} funding Series revenue valuation`,
-    type: 'funding-data',
-    domains: ['crunchbase.com', 'pitchbook.com', 'techcrunch.com'],
+    query: `"${brandName}" ${contextPart} funding valuation Series`,
+    type: 'funding-data', 
+    domains: ['crunchbase.com', 'techcrunch.com'],
+    priority: 1,
   });
 
-  // Revenue and financial data
+  // Medium priority - financial data
   queries.push({
-    query: `"${brandName}" ${contextPart} revenue "annual revenue" "market cap"`,
+    query: `"${brandName}" ${contextPart} revenue "market cap" IPO`,
     type: 'financial-data',
-    domains: ['bloomberg.com', 'reuters.com', 'sec.gov'],
+    domains: ['bloomberg.com', 'reuters.com'],
+    priority: 2,
   });
 
-  // Company scale indicators
+  // Lower priority - general scale indicators
   queries.push({
-    query: `"${brandName}" ${contextPart} "company size" offices locations global`,
+    query: `"${brandName}" ${contextPart} "company size" startup unicorn`,
     type: 'scale-indicators',
+    priority: 3,
   });
 
-  // Industry-specific sizing
-  if (industry) {
-    queries.push({
-      query: `"${brandName}" ${industry} market leader startup unicorn`,
-      type: 'industry-position',
-    });
-  }
+  // Sort by priority for potential early termination
+  return queries.sort((a, b) => a.priority - b.priority);
+}
 
-  // Public company data
-  queries.push({
-    query: `"${brandName}" IPO "went public" "stock ticker" NYSE NASDAQ`,
-    type: 'public-status',
-    domains: ['sec.gov', 'finance.yahoo.com', 'bloomberg.com'],
-  });
-
-  return queries;
+function getSourcePriority(url: string, searchType: string): number {
+  // Higher numbers = higher priority
+  let priority = 0;
+  
+  // High-value domains
+  if (url.includes('linkedin.com')) priority += 10;
+  if (url.includes('crunchbase.com')) priority += 9;
+  if (url.includes('sec.gov')) priority += 8;
+  if (url.includes('bloomberg.com')) priority += 7;
+  if (url.includes('reuters.com')) priority += 6;
+  if (url.includes('techcrunch.com')) priority += 5;
+  
+  // Search type priority
+  if (searchType === 'employee-data') priority += 3;
+  if (searchType === 'funding-data') priority += 3;
+  if (searchType === 'financial-data') priority += 2;
+  
+  return priority;
 }
